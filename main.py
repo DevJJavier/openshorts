@@ -674,8 +674,8 @@ def process_video_to_vertical(input_video, final_output_video):
             else:
                 # "Single Speaker" -> Track & Crop
                 
-                # Detect every 2nd frame for performance
-                if frame_number % 2 == 0:
+                # Detect every 3rd frame for performance (imperceptible at 30fps)
+                if frame_number % 3 == 0:
                     candidates = detect_face_candidates(frame)
                     target_box = speaker_tracker.get_target(candidates, frame_number, original_width)
                     if target_box:
@@ -747,14 +747,20 @@ def process_video_to_vertical(input_video, final_output_video):
     
     return True
 
+_whisper_model = None
+
+def _get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        from faster_whisper import WhisperModel
+        _whisper_model = WhisperModel("small", device="cpu", compute_type="int8", num_workers=2)
+    return _whisper_model
+
 def transcribe_video(video_path):
     print("🎙️  Transcribing video with Faster-Whisper (CPU Optimized)...")
-    from faster_whisper import WhisperModel
+    model = _get_whisper_model()
     
-    # Run on CPU with INT8 quantization for speed
-    model = WhisperModel("base", device="cpu", compute_type="int8")
-    
-    segments, info = model.transcribe(video_path, word_timestamps=True)
+    segments, info = model.transcribe(video_path, word_timestamps=True, beam_size=5)
     
     print(f"   Detected language '{info.language}' with probability {info.language_probability:.2f}")
     

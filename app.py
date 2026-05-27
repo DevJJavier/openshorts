@@ -565,6 +565,39 @@ class SubtitleRequest(BaseModel):
     input_filename: Optional[str] = None
 
 
+
+
+class TranscriptUpdateRequest(BaseModel):
+    captions: List[dict]  # [{text, startMs, endMs}]
+
+@app.put("/api/clip/{job_id}/{clip_index}/transcript")
+async def update_clip_transcript(job_id: str, clip_index: int, req: TranscriptUpdateRequest):
+    """Save user-adjusted subtitle timing back to metadata."""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    output_dir = os.path.join(OUTPUT_DIR, job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+
+    with open(json_files[0], "r") as f:
+        data = json.load(f)
+
+    clips = data.get("shorts", [])
+    if clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    # Store adjusted captions per clip
+    if "adjusted_captions" not in data:
+        data["adjusted_captions"] = {}
+    data["adjusted_captions"][str(clip_index)] = req.captions
+
+    with open(json_files[0], "w") as f:
+        json.dump(data, f, indent=4)
+
+    return {"success": True, "saved": len(req.captions)}
+
 @app.get("/api/clip/{job_id}/{clip_index}/transcript")
 async def get_clip_transcript(job_id: str, clip_index: int):
     """Return word-level captions for a specific clip, formatted for Remotion."""
@@ -592,6 +625,16 @@ async def get_clip_transcript(job_id: str, clip_index: int):
     clip_start = clip_data.get('start', 0)
     clip_end = clip_data.get('end', 0)
 
+    # Return user-adjusted captions if they exist
+    adjusted = data.get("adjusted_captions", {}).get(str(clip_index))
+    if adjusted:
+        return {
+            "captions": adjusted,
+            "durationSec": clip_end - clip_start,
+            "language": transcript.get('language', 'en'),
+            "adjusted": True,
+        }
+
     # Extract words within clip range and convert to CaptionWord format
     captions = []
     for segment in transcript.get('segments', []):
@@ -609,6 +652,7 @@ async def get_clip_transcript(job_id: str, clip_index: int):
         "captions": captions,
         "durationSec": duration_sec,
         "language": transcript.get('language', 'en'),
+        "adjusted": False,
     }
 
 

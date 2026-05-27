@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Type, Loader2 } from 'lucide-react';
+import { X, Type, Loader2, Clock } from 'lucide-react';
 import { getApiUrl } from '../config';
 import RemotionPreview from './RemotionPreview';
+import SubtitleTimeline from './SubtitleTimeline';
 
 const FONT_OPTIONS = [
     { value: 'Verdana', label: 'Verdana' },
@@ -42,12 +43,15 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
     const [showTextEditor, setShowTextEditor] = useState(false);
 
     // Remotion preview state
-    const [captions, setCaptions] = useState([]);
-    const [originalCaptions, setOriginalCaptions] = useState([]);
+    // whisperCaptions = immutable source of truth from Whisper (never modified)
+    // adjustedCaptions = what Remotion renders (timeline adjustments applied on top)
+    const [whisperCaptions, setWhisperCaptions] = useState([]);
+    const [adjustedCaptions, setAdjustedCaptions] = useState([]);
     const [editableText, setEditableText] = useState('');
     const [durationSec, setDurationSec] = useState(30);
     const [captionsLoading, setCaptionsLoading] = useState(false);
     const [useRemotionPreview, setUseRemotionPreview] = useState(false);
+    const [showTimeline, setShowTimeline] = useState(false);
 
     // Fetch word-level captions when modal opens
     useEffect(() => {
@@ -58,8 +62,8 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
             .then((res) => res.ok ? res.json() : null)
             .then((data) => {
                 if (data && data.captions && data.captions.length > 0) {
-                    setCaptions(data.captions);
-                    setOriginalCaptions(data.captions);
+                    setWhisperCaptions(data.captions);
+                    setAdjustedCaptions(data.captions);
                     setEditableText(data.captions.map(c => c.text).join(' '));
                     setDurationSec(data.durationSec || 30);
                     setUseRemotionPreview(true);
@@ -71,33 +75,29 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
             .finally(() => setCaptionsLoading(false));
     }, [isOpen, jobId, clipIndex]);
 
-    // When user edits text, redistribute words across original timestamps
+    // Edit text: remap new words onto the ORIGINAL Whisper timestamps
     const handleTextEdit = (newText) => {
         setEditableText(newText);
         const newWords = newText.split(/\s+/).filter(w => w.length > 0);
-        if (newWords.length === 0 || originalCaptions.length === 0) {
-            setCaptions([]);
+        if (newWords.length === 0 || whisperCaptions.length === 0) {
+            setAdjustedCaptions([]);
             return;
         }
-
-        // Distribute new words across the time span of original captions
-        const totalDurationMs = originalCaptions[originalCaptions.length - 1].endMs - originalCaptions[0].startMs;
-        const startMs = originalCaptions[0].startMs;
-        const wordDurationMs = totalDurationMs / newWords.length;
-
-        const newCaptions = newWords.map((word, i) => ({
+        const totalMs = whisperCaptions[whisperCaptions.length - 1].endMs - whisperCaptions[0].startMs;
+        const startMs = whisperCaptions[0].startMs;
+        const wordDurMs = totalMs / newWords.length;
+        setAdjustedCaptions(newWords.map((word, i) => ({
             text: word,
-            startMs: Math.round(startMs + i * wordDurationMs),
-            endMs: Math.round(startMs + (i + 1) * wordDurationMs),
-        }));
-        setCaptions(newCaptions);
+            startMs: Math.round(startMs + i * wordDurMs),
+            endMs: Math.round(startMs + (i + 1) * wordDurMs),
+        })));
     };
 
     if (!isOpen) return null;
 
-    // Build subtitle config for Remotion
+    // Build subtitle config for Remotion — always uses adjustedCaptions
     const subtitleConfig = {
-        captions,
+        captions: adjustedCaptions,
         position,
         style: {
             fontFamily: fontName,
@@ -228,7 +228,7 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                                     onClick={() => setShowTextEditor(!showTextEditor)}
                                     className="w-full flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2"
                                 >
-                                    <span>Edit Text ({captions.length} words)</span>
+                                    <span>Edit Text ({whisperCaptions.length} words)</span>
                                     <span className={`transition-transform ${showTextEditor ? 'rotate-180' : ''}`}>▾</span>
                                 </button>
                                 {showTextEditor && (
@@ -239,6 +239,32 @@ export default function SubtitleModal({ isOpen, onClose, onGenerate, isProcessin
                                         className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-primary/50 resize-none leading-relaxed animate-[fadeIn_0.15s_ease-out]"
                                         placeholder="Edit subtitle text..."
                                     />
+                                )}
+                            </div>
+                        )}
+
+                        {/* Timeline Editor toggle */}
+                        {useRemotionPreview && (
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTimeline(!showTimeline)}
+                                    className="w-full flex items-center justify-between text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2"
+                                >
+                                    <span className="flex items-center gap-1.5"><Clock size={12} /> Timeline Editor</span>
+                                    <span className={`transition-transform ${showTimeline ? 'rotate-180' : ''}`}>▾</span>
+                                </button>
+                                {showTimeline && (
+                                    <div className="animate-[fadeIn_0.15s_ease-out]">
+                                        <SubtitleTimeline
+                                            captions={adjustedCaptions}
+                                            originalCaptions={whisperCaptions}
+                                            durationSec={durationSec}
+                                            jobId={jobId}
+                                            clipIndex={clipIndex}
+                                            onCaptionsChange={(updated) => setAdjustedCaptions(updated)}
+                                        />
+                                    </div>
                                 )}
                             </div>
                         )}
