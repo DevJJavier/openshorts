@@ -29,13 +29,15 @@ load_dotenv()
 ASPECT_RATIO = 9 / 16
 
 GEMINI_PROMPT_TEMPLATE = """
-You are a senior short-form video editor. Read the ENTIRE transcript and word-level timestamps to choose the 3–15 MOST VIRAL moments for TikTok/IG Reels/YouTube Shorts. Each clip must be between 15 and 60 seconds long.
+You are a senior short-form video editor. Read the ENTIRE transcript and word-level timestamps to choose the 3–15 MOST VIRAL moments for TikTok/IG Reels/YouTube Shorts. Each clip must be between {clip_min} and {clip_max} seconds long.
+
+CONTENT TYPE: {content_type_instruction}
 
 ⚠️ FFMPEG TIME CONTRACT — STRICT REQUIREMENTS:
 - Return timestamps in ABSOLUTE SECONDS from the start of the video (usable in: ffmpeg -ss <start> -to <end> -i <input> ...).
 - Only NUMBERS with decimal point, up to 3 decimals (examples: 0, 1.250, 17.350).
 - Ensure 0 ≤ start < end ≤ VIDEO_DURATION_SECONDS.
-- Each clip between 15 and 60 s (inclusive).
+- Each clip between {clip_min} and {clip_max} s (inclusive).
 - Prefer starting 0.2–0.4 s BEFORE the hook and ending 0.2–0.4 s AFTER the payoff.
 - Use silence moments for natural cuts; never cut in the middle of a word or phrase.
 - STRICTLY FORBIDDEN to use time formats other than absolute seconds.
@@ -49,8 +51,7 @@ WORDS_JSON (array of {{w, s, e}} where s/e are seconds):
 {words_json}
 
 STRICT EXCLUSIONS:
-- No generic intros/outros or purely sponsorship segments unless they contain the hook.
-- No clips < 15 s or > 60 s.
+- No clips < {clip_min} s or > {clip_max} s.
 
 OUTPUT — RETURN ONLY VALID JSON (no markdown, no comments). Order clips by predicted performance (best to worst). In the descriptions, ALWAYS include a CTA like "Follow me and comment X and I'll send you the workflow" (especially if discussing an n8n workflow):
 {{
@@ -756,11 +757,13 @@ def _get_whisper_model():
         _whisper_model = WhisperModel("small", device="cpu", compute_type="int8", num_workers=2)
     return _whisper_model
 
-def transcribe_video(video_path):
+def transcribe_video(video_path, language=None):
     print("🎙️  Transcribing video with Faster-Whisper (CPU Optimized)...")
     model = _get_whisper_model()
-    
-    segments, info = model.transcribe(video_path, word_timestamps=True, beam_size=5)
+    transcribe_kwargs = dict(word_timestamps=True, beam_size=5)
+    if language and language != "auto":
+        transcribe_kwargs["language"] = language
+    segments, info = model.transcribe(video_path, **transcribe_kwargs)
     
     print(f"   Detected language '{info.language}' with probability {info.language_probability:.2f}")
     
@@ -797,7 +800,7 @@ def transcribe_video(video_path):
         'language': info.language
     }
 
-def get_viral_clips(transcript_result, video_duration):
+def get_viral_clips(transcript_result, video_duration, clip_min=15, clip_max=60, content_type='general'):
     print("🤖  Analyzing with Gemini...")
     
     api_key = os.getenv("GEMINI_API_KEY")
@@ -823,7 +826,18 @@ def get_viral_clips(transcript_result, video_duration):
                 'e': word['end']
             })
 
+    content_type_instructions = {
+        'general':  'General content (podcasts, vlogs, interviews). Focus on spoken moments with strong hooks.',
+        'music':    'Music video. Select the most energetic, catchy or emotional moments — chorus, drops, key lyrics. Transcript may be partial; prioritize energy and musical peaks.',
+        'tutorial': 'Tutorial or educational content. Select the most actionable, surprising or valuable tips.',
+        'sports':   'Sports or action content. Select peak action moments, highlights, celebrations.',
+    }
+    content_type_instruction = content_type_instructions.get(content_type, content_type_instructions['general'])
+
     prompt = GEMINI_PROMPT_TEMPLATE.format(
+        clip_min=clip_min,
+        clip_max=clip_max,
+        content_type_instruction=content_type_instruction,
         video_duration=video_duration,
         transcript_text=json.dumps(transcript_result['text']),
         words_json=json.dumps(words)
@@ -899,6 +913,10 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str, help="Output directory or file (if processing whole video).")
     parser.add_argument('--keep-original', action='store_true', help="Keep the downloaded YouTube video.")
     parser.add_argument('--skip-analysis', action='store_true', help="Skip AI analysis and convert the whole video.")
+    parser.add_argument('--clip-min', type=int, default=15, help="Minimum clip duration in seconds (default: 15)")
+    parser.add_argument('--clip-max', type=int, default=60, help="Maximum clip duration in seconds (default: 60)")
+    parser.add_argument('--content-type', type=str, default='general', choices=['general', 'music', 'tutorial', 'sports'], help="Content type hint for Gemini (default: general)")
+    parser.add_argument('--language', type=str, default=None, help="Force Whisper transcription language (e.g. en, es, fr). Default: auto-detect")
     
     args = parser.parse_args()
 
@@ -953,7 +971,7 @@ if __name__ == '__main__':
         process_video_to_vertical(input_video, output_file)
     else:
         # 3. Transcribe
-        transcript = transcribe_video(input_video)
+        transcript = transcribe_video(input_video, language=args.language)
         
         # Get duration
         cap = cv2.VideoCapture(input_video)
@@ -963,7 +981,7 @@ if __name__ == '__main__':
         cap.release()
 
         # 4. Gemini Analysis
-        clips_data = get_viral_clips(transcript, duration)
+        clips_data = get_viral_clips(transcript, duration, clip_min=args.clip_min, clip_max=args.clip_max, content_type=args.content_type)
         
         if not clips_data or 'shorts' not in clips_data:
             print("❌ Failed to identify clips. Converting whole video as fallback.")

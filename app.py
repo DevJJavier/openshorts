@@ -318,7 +318,11 @@ async def process_endpoint(
     request: Request,
     file: Optional[UploadFile] = File(None),
     url: Optional[str] = Form(None),
-    acknowledged: Optional[str] = Form(None)
+    acknowledged: Optional[str] = Form(None),
+    clip_min: Optional[int] = Form(None),
+    clip_max: Optional[int] = Form(None),
+    content_type_param: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
 ):
     api_key = request.headers.get("X-Gemini-Key")
     if not api_key:
@@ -327,11 +331,15 @@ async def process_endpoint(
     ack_flag = str(acknowledged).lower() in ("1", "true", "yes")
 
     # Handle JSON body manually for URL payload
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
+    content_type_header = request.headers.get("content-type", "")
+    if "application/json" in content_type_header:
         body = await request.json()
         url = body.get("url")
         ack_flag = bool(body.get("acknowledged"))
+        clip_min = body.get("clip_min", clip_min)
+        clip_max = body.get("clip_max", clip_max)
+        content_type_param = body.get("content_type", content_type_param)
+        language = body.get("language", language)
 
     if not url and not file:
         raise HTTPException(status_code=400, detail="Must provide URL or File")
@@ -387,6 +395,14 @@ async def process_endpoint(
         cmd.extend(["-i", input_path])
 
     cmd.extend(["-o", job_output_dir])
+    if clip_min is not None:
+        cmd.extend(["--clip-min", str(int(clip_min))])
+    if clip_max is not None:
+        cmd.extend(["--clip-max", str(int(clip_max))])
+    if content_type_param and content_type_param in ("general", "music", "tutorial", "sports"):
+        cmd.extend(["--content-type", content_type_param])
+    if language and language != "auto":
+        cmd.extend(["--language", language])
 
     print(f"[attestation] job={job_id} ip={attestation['ip']} source={attestation['source']} ack=true")
 

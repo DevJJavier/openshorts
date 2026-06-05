@@ -336,11 +336,15 @@ function App() {
 
       if (data.type === 'url') {
         headers['Content-Type'] = 'application/json';
-        body = JSON.stringify({ url: data.payload, acknowledged: !!data.acknowledged });
+        body = JSON.stringify({ url: data.payload, acknowledged: !!data.acknowledged, clip_min: data.clip_min, clip_max: data.clip_max, content_type: data.content_type, language: data.language });
       } else {
         const formData = new FormData();
         formData.append('file', data.payload);
         formData.append('acknowledged', data.acknowledged ? 'true' : 'false');
+        if (data.clip_min) formData.append('clip_min', data.clip_min);
+        if (data.clip_max) formData.append('clip_max', data.clip_max);
+        if (data.content_type) formData.append('content_type', data.content_type);
+        if (data.language && data.language !== 'auto') formData.append('language', data.language);
         body = formData;
       }
 

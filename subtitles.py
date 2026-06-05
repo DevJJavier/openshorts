@@ -2,7 +2,7 @@ import os
 import subprocess
 
 
-def transcribe_audio(video_path):
+def transcribe_audio(video_path, language=None):
     """
     Transcribe audio from a video file using faster-whisper.
     Returns transcript in the same format as main.py for compatibility.
@@ -14,7 +14,10 @@ def transcribe_audio(video_path):
     # tiny is 4x faster than base with minimal quality loss for subtitle timing
     model = WhisperModel("base", device="cpu", compute_type="int8", num_workers=2)
 
-    segments, info = model.transcribe(video_path, word_timestamps=True, beam_size=3)
+    transcribe_kwargs = dict(word_timestamps=True, beam_size=3)
+    if language and language != "auto":
+        transcribe_kwargs["language"] = language
+    segments, info = model.transcribe(video_path, **transcribe_kwargs)
 
     transcript = {
         "segments": [],

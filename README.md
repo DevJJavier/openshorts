@@ -204,6 +204,77 @@ Navigate to **`http://localhost:5175`**
 
 ---
 
+## Docker Commands
+
+### Normal start (no rebuild)
+```bash
+docker compose up
+```
+
+### Start in background (detached)
+```bash
+docker compose up -d
+```
+
+### Stop cleanly
+```bash
+docker compose down
+```
+> ⚠️ Always use `docker compose down` instead of `Ctrl+C` to avoid leaving containers in a broken state.
+
+### Rebuild after code changes
+```bash
+docker compose up --build
+```
+
+### Rebuild a single service (faster)
+```bash
+docker compose up --build backend
+docker compose up --build frontend
+docker compose up --build renderer
+```
+
+### Force full rebuild (no cache)
+```bash
+docker compose build --no-cache
+docker compose up
+```
+
+### Recover from a hard stop (Ctrl+C or crash)
+```bash
+# Stop any lingering containers
+docker compose down
+# Remove any corrupt state
+docker compose rm -f
+# Restart cleanly
+docker compose up --build
+```
+
+### View live logs
+```bash
+# All services
+docker compose logs -f
+
+# Backend only
+docker compose logs -f backend
+
+# Frontend only
+docker compose logs -f frontend
+```
+
+### Check container status
+```bash
+docker compose ps
+```
+
+### Free disk space (remove unused images/volumes)
+```bash
+docker system prune -f
+docker volume prune -f
+```
+
+---
+
 ## Technical Pipeline
 
 ### Clip Generator
