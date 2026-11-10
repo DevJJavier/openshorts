@@ -166,6 +166,10 @@ function App() {
   const [processingMedia, setProcessingMedia] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, settings
 
+  // UI preferences (persisted in localStorage)
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(() => localStorage.getItem('pref_subtitles_enabled') !== '0');
+  const [hooksEnabled, setHooksEnabled] = useState(() => localStorage.getItem('pref_hooks_enabled') !== '0');
+
   const [sessionRecovered, setSessionRecovered] = useState(false);
   const [showScheduleWeek, setShowScheduleWeek] = useState(false);
 
@@ -626,6 +630,52 @@ function App() {
 
               <div className="glass-panel p-6 mt-8">
                 <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Clip Generator Defaults</h2>
+                  <span className="text-[10px] bg-white/5 border border-white/5 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">Optional</span>
+                </div>
+                <div className="space-y-4">
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <p className="text-sm text-zinc-200 font-medium">Show Subtitles button</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Disable for sports/music videos where subtitles don't make sense</p>
+                    </div>
+                    <div className="relative inline-flex items-center ml-4">
+                      <input
+                        type="checkbox"
+                        checked={subtitlesEnabled}
+                        onChange={e => {
+                          setSubtitlesEnabled(e.target.checked);
+                          localStorage.setItem('pref_subtitles_enabled', e.target.checked ? '1' : '0');
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <p className="text-sm text-zinc-200 font-medium">Show Viral Hook button</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Disable if you prefer clean clips without text overlays</p>
+                    </div>
+                    <div className="relative inline-flex items-center ml-4">
+                      <input
+                        type="checkbox"
+                        checked={hooksEnabled}
+                        onChange={e => {
+                          setHooksEnabled(e.target.checked);
+                          localStorage.setItem('pref_hooks_enabled', e.target.checked ? '1' : '0');
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 mt-8">
+                <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Video Translation</h2>
                   <span className="text-[10px] bg-white/5 border border-white/5 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">Optional</span>
                 </div>
@@ -985,6 +1035,8 @@ function App() {
                           elevenLabsKey={elevenLabsKey}
                           onPlay={(time) => handleClipPlay(time)}
                           onPause={handleClipPause}
+                          subtitlesEnabled={subtitlesEnabled}
+                          hooksEnabled={hooksEnabled}
                         />
                       ))}
                     </div>

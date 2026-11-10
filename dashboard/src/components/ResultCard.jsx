@@ -6,7 +6,7 @@ import HookModal from './HookModal';
 import TranslateModal from './TranslateModal';
 import { renderInBrowser } from '../lib/renderInBrowser';
 
-export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUserId, geminiApiKey, elevenLabsKey, onPlay, onPause }) {
+export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUserId, geminiApiKey, elevenLabsKey, onPlay, onPause, subtitlesEnabled = true, hooksEnabled = true }) {
     const [showModal, setShowModal] = useState(false);
     const [showSubtitleModal, setShowSubtitleModal] = useState(false);
     const videoRef = React.useRef(null);
@@ -478,6 +478,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                         {isEditing ? 'Editing...' : 'Auto Edit'}
                     </button>
 
+                    {subtitlesEnabled && (
                     <button
                         onClick={() => setShowSubtitleModal(true)}
                         disabled={isSubtitling}
@@ -486,7 +487,9 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                         {isSubtitling ? <Loader2 size={14} className="animate-spin" /> : <Type size={14} />}
                         {isSubtitling ? 'Adding...' : 'Subtitles'}
                     </button>
+                    )}
 
+                    {hooksEnabled && (
                     <button
                         onClick={() => setShowHookModal(true)}
                         disabled={isHooking}
@@ -495,6 +498,7 @@ export default function ResultCard({ clip, index, jobId, uploadPostKey, uploadUs
                         {isHooking ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
                         {isHooking ? 'Adding...' : 'Viral Hook'}
                     </button>
+                    )}
 
                     <button
                         onClick={() => setShowTranslateModal(true)}

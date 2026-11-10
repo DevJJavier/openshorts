@@ -811,8 +811,8 @@ def get_viral_clips(transcript_result, video_duration, clip_min=15, clip_max=60,
 
     client = genai.Client(api_key=api_key)
     
-    # We use gemini-2.5-flash as requested.
-    model_name = 'gemini-2.5-flash' 
+    GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    model_name = GEMINI_MODELS[0]
     
     print(f"🤖  Initializing Gemini with model: {model_name}")
 
@@ -844,10 +844,25 @@ def get_viral_clips(transcript_result, video_duration, clip_min=15, clip_max=60,
     )
 
     try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt
-        )
+        response = None
+        last_error = None
+        for model_name in GEMINI_MODELS:
+            try:
+                print(f"🤖  Trying model: {model_name}")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                break
+            except Exception as model_err:
+                err_str = str(model_err)
+                if '503' in err_str or 'UNAVAILABLE' in err_str or 'high demand' in err_str.lower():
+                    print(f"⚠️  {model_name} unavailable, trying next model...")
+                    last_error = model_err
+                    continue
+                raise
+        if response is None:
+            raise last_error
         
         # --- Cost Calculation ---
         try:
@@ -900,7 +915,7 @@ def get_viral_clips(transcript_result, video_duration, clip_min=15, clip_max=60,
             
         return result_json
     except Exception as e:
-        print(f"❌ Gemini Error: {e}")
+        print(f"❌ Gemini Error: {type(e).__name__}: {e}")
         return None
 
 if __name__ == '__main__':
@@ -984,9 +999,9 @@ if __name__ == '__main__':
         clips_data = get_viral_clips(transcript, duration, clip_min=args.clip_min, clip_max=args.clip_max, content_type=args.content_type)
         
         if not clips_data or 'shorts' not in clips_data:
-            print("❌ Failed to identify clips. Converting whole video as fallback.")
-            output_file = os.path.join(output_dir, f"{video_title}_vertical.mp4")
-            process_video_to_vertical(input_video, output_file)
+            print("❌ Failed to identify clips from Gemini. Check your API key and quota.")
+            print("❌ Aborting — not converting full video to avoid wasting time.")
+            sys.exit(1)
         else:
             print(f"🔥 Found {len(clips_data['shorts'])} viral clips!")
             
